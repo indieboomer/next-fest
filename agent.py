@@ -134,12 +134,14 @@ def collect():
     appids = scrape_appids()
     log.info("Found %d appids", len(appids))
 
-    if not appids:
-        log.info("No appids found — fest may not have started yet")
-        return
-
     conn = sqlite3.connect(DB_PATH)
     init_db(conn)
+
+    if not appids:
+        log.info("No appids found — fest may not have started yet")
+        conn.close()
+        return
+
     c = conn.cursor()
 
     for appid in appids:
