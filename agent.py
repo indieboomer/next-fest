@@ -88,25 +88,23 @@ def scrape_appids():
 
         time.sleep(3)
 
-        log.info("Before scroll — sections: %d, app-links: %d, ds-appid: %d",
-                 len(page.query_selector_all('[id^="SaleSection_"]')),
-                 len(page.query_selector_all('a[href*="/app/"]')),
-                 len(page.query_selector_all('[data-ds-appid]')))
+        # Scroll each section into view one by one — sections use Intersection Observer
+        # and only fire their AJAX request when they actually enter the viewport
+        sections = page.query_selector_all('[id^="SaleSection_"]')
+        log.info("Found %d sections — scrolling each into view", len(sections))
+        for i, section in enumerate(sections):
+            section.scroll_into_view_if_needed()
+            time.sleep(3)  # wait for section's AJAX to complete
+            link_count = len(page.query_selector_all('a[href*="/app/"]'))
+            log.info("Section %d/%d — cumulative app-links: %d", i + 1, len(sections), link_count)
 
-        # Scroll until 3 consecutive passes yield no new links (sections load on entering viewport)
-        last_count = 0
-        no_change_rounds = 0
-        while no_change_rounds < 3:
-            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            time.sleep(4)
-            current_count = len(page.query_selector_all('a[href*="/app/"]'))
-            if current_count == last_count:
-                no_change_rounds += 1
-            else:
-                no_change_rounds = 0
-            last_count = current_count
+        # Final pass: scroll back to top then to bottom for any missed late-loaders
+        page.evaluate("window.scrollTo(0, 0)")
+        time.sleep(1)
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        time.sleep(3)
 
-        log.info("After scroll  — sections: %d, app-links: %d, ds-appid: %d",
+        log.info("Final count — sections: %d, app-links: %d, ds-appid: %d",
                  len(page.query_selector_all('[id^="SaleSection_"]')),
                  len(page.query_selector_all('a[href*="/app/"]')),
                  len(page.query_selector_all('[data-ds-appid]')))
