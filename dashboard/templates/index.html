@@ -63,12 +63,12 @@
       <div class="card-header">Top 10 by Recommendations</div>
       <div class="table-responsive">
         <table class="table table-sm mb-0">
-          <thead><tr><th>Game</th><th>Recs</th><th>Rating</th><th>Players</th></tr></thead>
+          <thead><tr><th>Game</th><th>Reviews</th><th>Rating</th><th>Players</th></tr></thead>
           <tbody>
           {% for g in stats.top_games %}
           <tr>
             <td><a href="/games/{{ g.appid }}">{{ g.name }}</a></td>
-            <td>{{ g.recommendations or '—' }}</td>
+            <td>{{ g.total_reviews or '—' }}</td>
             <td><small>{{ g.review_score_desc or '—' }}</small></td>
             <td>{{ g.player_count or '—' }}</td>
           </tr>

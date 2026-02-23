@@ -92,10 +92,10 @@ def index():
     stats['top_genres'] = [dict(r) for r in top_genres]
 
     top_games = c.execute("""
-        SELECT g.name, g.appid, s.recommendations, s.review_score_desc, s.player_count
+        SELECT g.name, g.appid, s.total_reviews, s.review_score_desc, s.player_count
         FROM snapshots s JOIN games g ON g.appid = s.appid
         WHERE s.collected_at = (SELECT MAX(collected_at) FROM snapshots WHERE appid = s.appid)
-        ORDER BY s.recommendations DESC LIMIT 10
+        ORDER BY s.total_reviews DESC NULLS LAST LIMIT 10
     """).fetchall()
     stats['top_games'] = [dict(r) for r in top_games]
 

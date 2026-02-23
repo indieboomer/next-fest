@@ -169,78 +169,95 @@ def fetch_player_count(appid):
 def collect():
     log.info("Starting data collection...")
 
-    appids = scrape_appids()
-    log.info("Found %d appids", len(appids))
-
     conn = sqlite3.connect(DB_PATH)
     init_db(conn)
-
-    if not appids:
-        log.info("No appids found — fest may not have started yet")
-        conn.close()
-        return
-
     c = conn.cursor()
 
-    for appid in appids:
+    # Load already-known appids from DB
+    known = {row[0] for row in c.execute("SELECT appid FROM games")}
+
+    if known:
+        # Subsequent runs: skip Playwright, use stored appids
+        log.info("Using %d known appids from DB — skipping scrape", len(known))
+        appids = known
+    else:
+        # First run: discover all demos via Playwright offset pagination
+        log.info("DB empty — running full Playwright discovery (~10 min)...")
+        appids = scrape_appids()
+        log.info("Discovered %d appids", len(appids))
+        if not appids:
+            log.info("No appids found — fest may not have started yet")
+            conn.close()
+            return
+
+    # Identify which appids still need metadata enrichment (new or previously failed)
+    unenriched = appids - {row[0] for row in c.execute("SELECT appid FROM games WHERE name IS NOT NULL")}
+    if unenriched:
+        log.info("Enriching metadata for %d games...", len(unenriched))
+
+    for i, appid in enumerate(appids):
         try:
-            game = fetch_game(appid)
-            if game is None:
-                log.warning("API returned success=false for appid %d", appid)
-                continue
+            needs_meta = appid in unenriched
+            recommendations = None
 
-            name = game.get('name', '')
-            genres = ', '.join([g['description'] for g in game.get('genres', [])])
+            if needs_meta:
+                game = fetch_game(appid)
+                if game is None:
+                    log.warning("API success=false for appid %d", appid)
+                    continue
 
-            store_tags = game.get('tags', {})
-            if isinstance(store_tags, dict):
-                tags = ', '.join(store_tags.values())
-            elif isinstance(store_tags, list):
-                tags = ', '.join([t.get('description', '') for t in store_tags])
+                name = game.get('name', '')
+                genres = ', '.join([g['description'] for g in game.get('genres', [])])
+
+                store_tags = game.get('tags', {})
+                if isinstance(store_tags, dict):
+                    tags = ', '.join(store_tags.values())
+                elif isinstance(store_tags, list):
+                    tags = ', '.join([t.get('description', '') for t in store_tags])
+                else:
+                    tags = ''
+
+                categories_list = game.get('categories', [])
+                categories = ', '.join([cat['description'] for cat in categories_list])
+                has_ai_disclosure = int(any(
+                    'AI' in cat['description'] or 'ai generated' in cat['description'].lower()
+                    for cat in categories_list
+                ))
+
+                developers = ', '.join(game.get('developers', []))
+                publishers = ', '.join(game.get('publishers', []))
+                release_date = game.get('release_date', {}).get('date', '')
+                supported_languages = game.get('supported_languages', '')
+                recommendations = game.get('recommendations', {}).get('total', 0)
+
+                price_overview = game.get('price_overview', {})
+                price_initial = price_overview.get('initial', 0)
+                price_final = price_overview.get('final', 0)
+                price_currency = price_overview.get('currency', '')
+
+                c.execute('''INSERT OR REPLACE INTO games
+                    (appid, name, genres, tags, categories, has_ai_disclosure,
+                     developers, publishers, release_date, supported_languages,
+                     price_initial, price_final, price_currency,
+                     first_seen, last_updated)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                            COALESCE((SELECT first_seen FROM games WHERE appid = ?), CURRENT_TIMESTAMP),
+                            CURRENT_TIMESTAMP)''',
+                    (appid, name, genres, tags, categories, has_ai_disclosure,
+                     developers, publishers, release_date, supported_languages,
+                     price_initial, price_final, price_currency,
+                     appid))
             else:
-                tags = ''
+                name = c.execute("SELECT name FROM games WHERE appid=?", (appid,)).fetchone()[0]
 
-            categories_list = game.get('categories', [])
-            categories = ', '.join([cat['description'] for cat in categories_list])
-            has_ai_disclosure = int(any(
-                'AI' in cat['description'] or 'ai generated' in cat['description'].lower()
-                for cat in categories_list
-            ))
-
-            developers = ', '.join(game.get('developers', []))
-            publishers = ', '.join(game.get('publishers', []))
-            release_date = game.get('release_date', {}).get('date', '')
-            supported_languages = game.get('supported_languages', '')
-            recommendations = game.get('recommendations', {}).get('total', 0)
-
-            price_overview = game.get('price_overview', {})
-            price_initial = price_overview.get('initial', 0)
-            price_final = price_overview.get('final', 0)
-            price_currency = price_overview.get('currency', '')
-
-            # Reviews
+            # Always: collect hourly metrics snapshot
             reviews = fetch_reviews(appid)
             review_score      = reviews.get('review_score')
             review_score_desc = reviews.get('review_score_desc')
             total_positive    = reviews.get('total_positive')
             total_negative    = reviews.get('total_negative')
             total_reviews     = reviews.get('total_reviews')
-
-            # Live player count
-            player_count = fetch_player_count(appid)
-
-            c.execute('''INSERT OR REPLACE INTO games
-                (appid, name, genres, tags, categories, has_ai_disclosure,
-                 developers, publishers, release_date, supported_languages,
-                 price_initial, price_final, price_currency,
-                 first_seen, last_updated)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                        COALESCE((SELECT first_seen FROM games WHERE appid = ?), CURRENT_TIMESTAMP),
-                        CURRENT_TIMESTAMP)''',
-                (appid, name, genres, tags, categories, has_ai_disclosure,
-                 developers, publishers, release_date, supported_languages,
-                 price_initial, price_final, price_currency,
-                 appid))
+            player_count      = fetch_player_count(appid)
 
             c.execute('''INSERT INTO snapshots
                 (appid, recommendations,
@@ -253,11 +270,18 @@ def collect():
                  total_positive, total_negative, total_reviews,
                  player_count))
 
-            log.info("Collected %s (%d) — reviews: %s, players: %s",
-                     name, appid, review_score_desc or 'n/a', player_count or 'n/a')
+            log.info("%s (%d) — %s, players: %s",
+                     name or appid, appid, review_score_desc or 'no reviews', player_count or 'n/a')
+
         except Exception as e:
-            log.error("Error fetching appid %d: %s", appid, e)
-        time.sleep(1)
+            log.error("Error for appid %d: %s", appid, e)
+
+        # Slower rate limit when enriching metadata, faster for metrics-only
+        time.sleep(1 if appid in unenriched else 0.3)
+
+        # Commit every 50 games so dashboard sees data progressively
+        if i % 50 == 49:
+            conn.commit()
 
     conn.commit()
     conn.close()
