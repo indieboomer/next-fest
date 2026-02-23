@@ -68,28 +68,37 @@ def scrape_appids():
     with sync_playwright() as p:
         browser = p.chromium.launch(args=['--no-sandbox', '--disable-dev-shm-usage'])
         context = browser.new_context()
-        # Bypass Steam age gate for mature-rated demos
+        # Bypass age gate and GDPR consent popup
         context.add_cookies([
-            {'name': 'birthtime',       'value': '631148401', 'domain': 'store.steampowered.com', 'path': '/'},
-            {'name': 'lastagecheckage', 'value': '1-0-1990',  'domain': 'store.steampowered.com', 'path': '/'},
-            {'name': 'mature_content',  'value': '1',         'domain': 'store.steampowered.com', 'path': '/'},
+            {'name': 'birthtime',       'value': '631148401',  'domain': 'store.steampowered.com', 'path': '/'},
+            {'name': 'lastagecheckage', 'value': '1-0-1990',   'domain': 'store.steampowered.com', 'path': '/'},
+            {'name': 'mature_content',  'value': '1',          'domain': 'store.steampowered.com', 'path': '/'},
+            {'name': 'cookiesettings',  'value': '{"version":1,"preference_cookies":true,"advertising_cookies":true,"analytics_cookies":true}',
+             'domain': 'store.steampowered.com', 'path': '/'},
         ])
         page = context.new_page()
 
-        # domcontentloaded is reliable; networkidle can hang on Steam's analytics traffic
         page.goto("https://store.steampowered.com/sale/nextfest", wait_until='domcontentloaded')
-        try:
-            page.wait_for_selector('[class*="SaleSection"]', timeout=15000)
-        except Exception:
-            pass
-        time.sleep(2)
 
-        # Scroll until three consecutive passes find no new game links
+        # Sections use id="SaleSection_XXXXX" — wait for at least one to appear
+        try:
+            page.wait_for_selector('[id^="SaleSection_"]', timeout=20000)
+        except Exception:
+            log.warning("SaleSection elements not found within timeout")
+
+        time.sleep(3)
+
+        log.info("Before scroll — sections: %d, app-links: %d, ds-appid: %d",
+                 len(page.query_selector_all('[id^="SaleSection_"]')),
+                 len(page.query_selector_all('a[href*="/app/"]')),
+                 len(page.query_selector_all('[data-ds-appid]')))
+
+        # Scroll until 3 consecutive passes yield no new links (sections load on entering viewport)
         last_count = 0
         no_change_rounds = 0
         while no_change_rounds < 3:
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            time.sleep(3)
+            time.sleep(4)
             current_count = len(page.query_selector_all('a[href*="/app/"]'))
             if current_count == last_count:
                 no_change_rounds += 1
@@ -97,7 +106,12 @@ def scrape_appids():
                 no_change_rounds = 0
             last_count = current_count
 
-        # Primary: data-ds-appid attributes on game cards (handles bundles with comma-separated ids)
+        log.info("After scroll  — sections: %d, app-links: %d, ds-appid: %d",
+                 len(page.query_selector_all('[id^="SaleSection_"]')),
+                 len(page.query_selector_all('a[href*="/app/"]')),
+                 len(page.query_selector_all('[data-ds-appid]')))
+
+        # Primary: data-ds-appid attributes on game cards
         for el in page.query_selector_all('[data-ds-appid]'):
             val = el.get_attribute('data-ds-appid') or ''
             for aid in val.split(','):
@@ -105,7 +119,7 @@ def scrape_appids():
                 if aid.isdigit():
                     appids.add(int(aid))
 
-        # Fallback: parse all /app/ href links
+        # Fallback: parse /app/ href links
         for link in page.query_selector_all('a[href*="/app/"]'):
             href = link.get_attribute('href') or ''
             m = re.search(r'/app/(\d+)', href)
