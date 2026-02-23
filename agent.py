@@ -80,55 +80,11 @@ def _extract_appids_from_dom(page):
     return ids
 
 
-def _collect_browse_urls(page):
-    """After sections load, find 'See All' / browse links inside sections."""
-    browse_urls = set()
-    for section in page.query_selector_all('[id^="SaleSection_"]'):
-        for link in section.query_selector_all('a[href]'):
-            href = link.get_attribute('href') or ''
-            text = (link.inner_text() or '').strip().lower()
-            # Links that go to search/browse pages, or contain "see", "all", "browse"
-            if ('search' in href or 'browse' in href) and 'steampowered' in href:
-                browse_urls.add(href)
-            elif any(w in text for w in ['see all', 'view all', 'browse', 'show all']):
-                browse_urls.add(href)
-    return browse_urls
-
-
-def _paginate_search(base_url):
-    """Paginate through a Steam search results URL and collect all appids from logo URLs."""
-    appids = set()
-    # Strip existing pagination params and force JSON mode
-    clean = re.sub(r'[?&](start|count|json)=[^&]*', '', base_url).rstrip('?&')
-    sep = '&' if '?' in clean else '?'
-    start = 0
-    while True:
-        url = f"{clean}{sep}json=1&start={start}&count=100"
-        try:
-            resp = requests.get(url, timeout=15,
-                                headers={'User-Agent': 'Mozilla/5.0'})
-            data = resp.json()
-            items = data.get('items', [])
-            if not items:
-                break
-            for item in items:
-                logo = item.get('logo', '')
-                m = re.search(r'/apps/(\d+)/', logo)
-                if m:
-                    appids.add(int(m.group(1)))
-            log.info("Paginating %s start=%d → %d items", base_url.split('?')[0], start, len(items))
-            if len(items) < 100:
-                break
-            start += 100
-            time.sleep(0.5)
-        except Exception as e:
-            log.error("Pagination error at start=%d: %s", start, e)
-            break
-    return appids
-
-
 def scrape_appids():
     all_appids = set()
+    base = "https://store.steampowered.com/sale/nextfest"
+    offsets = range(0, 1750, 50)  # 0, 50, 100, … 1700
+
     with sync_playwright() as p:
         browser = p.chromium.launch(args=['--no-sandbox', '--disable-dev-shm-usage'])
         context = browser.new_context()
@@ -141,38 +97,34 @@ def scrape_appids():
         ])
         page = context.new_page()
 
-        page.goto("https://store.steampowered.com/sale/nextfest", wait_until='domcontentloaded')
-        try:
-            page.wait_for_selector('[id^="SaleSection_"]', timeout=20000)
-        except Exception:
-            log.warning("SaleSection elements not found within timeout")
-        time.sleep(3)
+        for offset in offsets:
+            url = f"{base}?tab=23&offset={offset}"
+            try:
+                page.goto(url, wait_until='domcontentloaded')
+                page.wait_for_selector('[id^="SaleSection_"]', timeout=15000)
+            except Exception:
+                log.warning("offset=%d: no sections found, stopping", offset)
+                break
 
-        # Scroll every section into view to trigger AJAX loads
-        sections = page.query_selector_all('[id^="SaleSection_"]')
-        log.info("Scrolling %d sections into view", len(sections))
-        for i, section in enumerate(sections):
-            section.scroll_into_view_if_needed()
-            time.sleep(3)
-            log.info("Section %d/%d — app-links so far: %d",
-                     i + 1, len(sections), len(page.query_selector_all('a[href*="/app/"]')))
+            time.sleep(2)
 
-        # Collect appids visible in DOM
-        all_appids.update(_extract_appids_from_dom(page))
-        log.info("From DOM: %d appids", len(all_appids))
+            # Scroll each section into view to trigger its AJAX load
+            sections = page.query_selector_all('[id^="SaleSection_"]')
+            for section in sections:
+                section.scroll_into_view_if_needed()
+                time.sleep(3)
 
-        # Find and log "See All" / browse links within sections
-        browse_urls = _collect_browse_urls(page)
-        log.info("Found %d browse/see-all URLs: %s", len(browse_urls),
-                 ' | '.join(list(browse_urls)[:5]))
+            before = len(all_appids)
+            all_appids.update(_extract_appids_from_dom(page))
+            new_count = len(all_appids) - before
+            log.info("offset=%4d  +%-4d  total=%d", offset, new_count, len(all_appids))
+
+            # No new games found — we've passed the end of the list
+            if new_count == 0 and offset > 0:
+                log.info("No new appids at offset %d — reached end of listing", offset)
+                break
 
         browser.close()
-
-    # Paginate through any browse URLs to get the full lists
-    for url in browse_urls:
-        extra = _paginate_search(url)
-        log.info("Browse URL yielded %d appids: %s", len(extra), url[:80])
-        all_appids.update(extra)
 
     return all_appids
 
