@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  nextfest-agent:
+    build: .
+    volumes:
+      - nextfest_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  nextfest_data:
