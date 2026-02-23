@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Next Fest Intelligence{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #0e1117; color: #e0e0e0; }
+    .navbar { background: #1a1f2e !important; border-bottom: 1px solid #2a3050; }
+    .navbar-brand { color: #4fc3f7 !important; font-weight: 700; letter-spacing: .5px; }
+    .nav-link { color: #aab4be !important; }
+    .nav-link.active, .nav-link:hover { color: #4fc3f7 !important; }
+    .card { background: #1a1f2e; border: 1px solid #2a3050; }
+    .card-header { background: #222840; border-bottom: 1px solid #2a3050; font-weight: 600; color: #4fc3f7; }
+    .table { color: #e0e0e0; }
+    .table th { color: #4fc3f7; border-color: #2a3050; }
+    .table td { border-color: #1e2438; }
+    .table tbody tr:hover { background: #1e2438; }
+    .badge-ai { background: #ff6b6b; }
+    .stat-card { border-left: 4px solid #4fc3f7; }
+    a { color: #4fc3f7; }
+    a:hover { color: #81d4fa; }
+    .form-control, .form-select {
+      background: #0e1117; color: #e0e0e0;
+      border-color: #2a3050;
+    }
+    .form-control:focus, .form-select:focus {
+      background: #0e1117; color: #e0e0e0;
+      border-color: #4fc3f7; box-shadow: none;
+    }
+    .btn-primary { background: #1565c0; border-color: #1565c0; }
+    .btn-primary:hover { background: #1976d2; border-color: #1976d2; }
+    #chat-box { height: 420px; overflow-y: auto; background: #0e1117; border: 1px solid #2a3050; border-radius: 6px; padding: 1rem; }
+    .msg-user { text-align: right; margin-bottom: .75rem; }
+    .msg-user span { background: #1565c0; border-radius: 12px 12px 2px 12px; padding: .4rem .9rem; display: inline-block; }
+    .msg-ai { margin-bottom: .75rem; }
+    .msg-ai span { background: #1a1f2e; border: 1px solid #2a3050; border-radius: 12px 12px 12px 2px; padding: .4rem .9rem; display: inline-block; white-space: pre-wrap; }
+    .msg-thinking span { color: #aab4be; font-style: italic; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+<nav class="navbar navbar-expand-lg mb-4">
+  <div class="container">
+    <a class="navbar-brand" href="/">⚡ Next Fest Intel</a>
+    <div class="collapse navbar-collapse">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item"><a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">Overview</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path.startswith('/games') %}active{% endif %}" href="/games">Games</a></li>
+        <li class="nav-item"><a class="nav-link {% if request.path == '/chat' %}active{% endif %}" href="/chat">AI Chat</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+<div class="container pb-5">
+  {% block content %}{% endblock %}
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

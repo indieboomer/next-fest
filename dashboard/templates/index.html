@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Overview — Next Fest Intel{% endblock %}
+{% block content %}
+<h2 class="mb-4">Overview</h2>
+
+{% if stats is none %}
+<div class="alert" style="background:#1a1f2e;border:1px solid #ff6b6b;color:#ff6b6b;">
+  Database not available yet — the agent will create it on first successful collection run.
+</div>
+{% elif stats.total_games == 0 %}
+<div class="alert" style="background:#1a1f2e;border:1px solid #ffa726;color:#ffa726;">
+  No games collected yet. Steam Next Fest may not have started, or the agent is still running its first pass.
+</div>
+{% else %}
+
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="card stat-card p-3">
+      <div class="text-muted small">Total Games</div>
+      <div class="fs-3 fw-bold">{{ stats.total_games }}</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card stat-card p-3" style="border-left-color:#ff6b6b">
+      <div class="text-muted small">AI Disclosed</div>
+      <div class="fs-3 fw-bold">{{ stats.ai_games }}
+        <small class="fs-6 text-muted">({{ "%.1f"|format(stats.ai_games / stats.total_games * 100) }}%)</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card stat-card p-3" style="border-left-color:#66bb6a">
+      <div class="text-muted small">Free to Play</div>
+      <div class="fs-3 fw-bold">{{ stats.free_games }}</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="card stat-card p-3" style="border-left-color:#ab47bc">
+      <div class="text-muted small">Collection Runs</div>
+      <div class="fs-3 fw-bold">{{ stats.snapshot_count }}</div>
+      <div class="text-muted" style="font-size:.75rem">Last: {{ stats.last_snapshot or 'never' }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header">Top Genres</div>
+      <ul class="list-group list-group-flush">
+        {% for g in stats.top_genres %}
+        <li class="list-group-item d-flex justify-content-between align-items-center"
+            style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+          <a href="/games?genre={{ g.genres | urlencode }}">{{ g.genres }}</a>
+          <span class="badge" style="background:#1565c0;">{{ g.cnt }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">Top 10 by Recommendations</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Game</th><th>Recs</th><th>Rating</th><th>Players</th></tr></thead>
+          <tbody>
+          {% for g in stats.top_games %}
+          <tr>
+            <td><a href="/games/{{ g.appid }}">{{ g.name }}</a></td>
+            <td>{{ g.recommendations or '—' }}</td>
+            <td><small>{{ g.review_score_desc or '—' }}</small></td>
+            <td>{{ g.player_count or '—' }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

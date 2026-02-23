@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Games — Next Fest Intel{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h2 class="mb-0">Games <span class="fs-5 text-muted">({{ games | length }})</span></h2>
+</div>
+
+<form method="get" class="row g-2 mb-4">
+  <div class="col-sm-4">
+    <select name="genre" class="form-select form-select-sm">
+      <option value="">All genres</option>
+      {% for g in all_genres %}
+      <option value="{{ g }}" {% if filters.genre == g %}selected{% endif %}>{{ g }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-sm-3">
+    <select name="sort" class="form-select form-select-sm">
+      <option value="recommendations" {% if filters.sort == 'recommendations' %}selected{% endif %}>Sort: Recommendations</option>
+      <option value="player_count"    {% if filters.sort == 'player_count' %}selected{% endif %}>Sort: Players</option>
+      <option value="total_reviews"   {% if filters.sort == 'total_reviews' %}selected{% endif %}>Sort: Reviews</option>
+      <option value="name"            {% if filters.sort == 'name' %}selected{% endif %}>Sort: Name</option>
+    </select>
+  </div>
+  <div class="col-sm-3">
+    <div class="form-check mt-1 ms-1">
+      <input class="form-check-input" type="checkbox" name="ai" value="1" id="aiCheck"
+             {% if filters.ai == '1' %}checked{% endif %}>
+      <label class="form-check-label" for="aiCheck">AI disclosed only</label>
+    </div>
+  </div>
+  <div class="col-sm-2">
+    <button class="btn btn-primary btn-sm w-100" type="submit">Filter</button>
+  </div>
+</form>
+
+{% if games %}
+<div class="table-responsive">
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Genres</th>
+        <th>Recs</th>
+        <th>Players</th>
+        <th>Rating</th>
+        <th>Price</th>
+        <th>AI</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for g in games %}
+    <tr>
+      <td><a href="/games/{{ g.appid }}">{{ g.name }}</a></td>
+      <td><small class="text-muted">{{ g.genres or '—' }}</small></td>
+      <td>{{ g.recommendations or '—' }}</td>
+      <td>{{ g.player_count or '—' }}</td>
+      <td><small>{{ g.review_score_desc or '—' }}</small></td>
+      <td>
+        {% if g.price_final == 0 %}
+          <span class="text-success">Free</span>
+        {% elif g.price_final %}
+          {{ "%.2f"|format(g.price_final / 100) }} {{ g.price_currency }}
+        {% else %}—{% endif %}
+      </td>
+      <td>
+        {% if g.has_ai_disclosure %}
+          <span class="badge badge-ai">AI</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="text-muted">No games found. The fest may not have started yet.</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}AI Chat — Next Fest Intel{% endblock %}
+{% block content %}
+<h2 class="mb-1">AI Chat</h2>
+<p class="text-muted small mb-3">Ask GPT-4o anything about the collected Next Fest dataset.</p>
+
+<div id="chat-box" class="mb-3">
+  <div class="msg-ai">
+    <span>Hi! I'm your Steam Next Fest analyst. Ask me anything about the collected data —
+    top games, genre trends, AI disclosure rates, player counts, or review sentiment.</span>
+  </div>
+</div>
+
+<div class="input-group">
+  <input id="chat-input" type="text" class="form-control"
+         placeholder="e.g. Which genres have the most AI-disclosed games?"
+         autocomplete="off">
+  <button class="btn btn-primary" id="send-btn" onclick="sendMessage()">Send</button>
+</div>
+<div class="text-muted mt-2" style="font-size:.75rem">
+  Suggestions: &nbsp;
+  <a href="#" class="text-muted" onclick="prefill('What are the top 5 games by player count?')">top players</a> &bull;
+  <a href="#" class="text-muted" onclick="prefill('How many games have AI disclosure?')">AI stats</a> &bull;
+  <a href="#" class="text-muted" onclick="prefill('Which genres are trending most?')">genre trends</a> &bull;
+  <a href="#" class="text-muted" onclick="prefill('Which games improved most in recommendations over time?')">rising games</a>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const chatBox = document.getElementById('chat-box');
+const input   = document.getElementById('chat-input');
+const sendBtn = document.getElementById('send-btn');
+let history = [];
+
+function prefill(text) {
+  input.value = text;
+  input.focus();
+  return false;
+}
+
+function appendMsg(role, text) {
+  const div = document.createElement('div');
+  div.className = role === 'user' ? 'msg-user' : (role === 'thinking' ? 'msg-ai msg-thinking' : 'msg-ai');
+  div.innerHTML = `<span>${escapeHtml(text)}</span>`;
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
+  return div;
+}
+
+function escapeHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function sendMessage() {
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  sendBtn.disabled = true;
+
+  appendMsg('user', text);
+  history.push({ role: 'user', content: text });
+
+  const thinking = appendMsg('thinking', 'Thinking…');
+
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: history })
+    });
+    const data = await res.json();
+    const reply = data.reply || 'No response.';
+    thinking.remove();
+    appendMsg('ai', reply);
+    history.push({ role: 'assistant', content: reply });
+    // Keep last 10 turns to avoid huge context
+    if (history.length > 20) history = history.slice(-20);
+  } catch (e) {
+    thinking.remove();
+    appendMsg('ai', 'Error contacting the server. Please try again.');
+  }
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+input.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+</script>
+{% endblock %}

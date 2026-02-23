@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}{{ game.name }} — Next Fest Intel{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block content %}
+<a href="/games" class="text-muted small">&larr; Back to games</a>
+<h2 class="mt-2 mb-1">{{ game.name }}</h2>
+<div class="text-muted small mb-4">AppID: {{ game.appid }} &bull;
+  First seen: {{ game.first_seen }} &bull; Last updated: {{ game.last_updated }}</div>
+
+<div class="row g-4">
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-header">Metadata</div>
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+          <span class="text-muted small d-block">Genres</span>{{ game.genres or '—' }}
+        </li>
+        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+          <span class="text-muted small d-block">Tags</span>
+          <span style="font-size:.85rem">{{ game.tags or '—' }}</span>
+        </li>
+        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+          <span class="text-muted small d-block">Developer</span>{{ game.developers or '—' }}
+        </li>
+        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+          <span class="text-muted small d-block">Publisher</span>{{ game.publishers or '—' }}
+        </li>
+        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+          <span class="text-muted small d-block">Release Date</span>{{ game.release_date or '—' }}
+        </li>
+        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+          <span class="text-muted small d-block">Price</span>
+          {% if game.price_final == 0 %}Free
+          {% elif game.price_final %}{{ "%.2f"|format(game.price_final / 100) }} {{ game.price_currency }}
+          {% else %}—{% endif %}
+        </li>
+        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+          <span class="text-muted small d-block">AI Disclosure</span>
+          {% if game.has_ai_disclosure %}<span class="badge badge-ai">Yes</span>{% else %}No{% endif %}
+        </li>
+        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+          <span class="text-muted small d-block">Languages</span>
+          <span style="font-size:.8rem">{{ game.supported_languages or '—' }}</span>
+        </li>
+      </ul>
+    </div>
+    <a href="https://store.steampowered.com/app/{{ game.appid }}"
+       target="_blank" class="btn btn-sm btn-outline-secondary w-100">
+      View on Steam &nearr;
+    </a>
+  </div>
+
+  <div class="col-lg-8">
+    {% if snapshots %}
+    <div class="card mb-3">
+      <div class="card-header">Interest Over Time</div>
+      <div class="card-body">
+        <canvas id="trendChart" height="180"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Snapshot History ({{ snapshots | length }} runs)</div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Time</th><th>Recs</th><th>Players</th><th>Positive</th><th>Negative</th><th>Rating</th></tr></thead>
+          <tbody>
+          {% for s in snapshots | reverse %}
+          <tr>
+            <td><small>{{ s.collected_at }}</small></td>
+            <td>{{ s.recommendations or '—' }}</td>
+            <td>{{ s.player_count or '—' }}</td>
+            <td>{{ s.total_positive or '—' }}</td>
+            <td>{{ s.total_negative or '—' }}</td>
+            <td><small>{{ s.review_score_desc or '—' }}</small></td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% else %}
+    <div class="text-muted">No snapshots collected yet.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+{% if snapshots %}
+<script>
+const labels  = {{ chart_labels | safe }};
+const recs    = {{ chart_recs | safe }};
+const players = {{ chart_players | safe }};
+
+new Chart(document.getElementById('trendChart'), {
+  data: {
+    labels,
+    datasets: [
+      {
+        type: 'line', label: 'Recommendations', data: recs,
+        borderColor: '#4fc3f7', backgroundColor: 'rgba(79,195,247,.1)',
+        yAxisID: 'y', tension: .3, fill: true
+      },
+      {
+        type: 'line', label: 'Current Players', data: players,
+        borderColor: '#ab47bc', backgroundColor: 'rgba(171,71,188,.1)',
+        yAxisID: 'y2', tension: .3, fill: false
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { labels: { color: '#aab4be' } } },
+    scales: {
+      x:  { ticks: { color: '#aab4be', maxTicksLimit: 8 }, grid: { color: '#1e2438' } },
+      y:  { ticks: { color: '#4fc3f7' }, grid: { color: '#1e2438' }, position: 'left' },
+      y2: { ticks: { color: '#ab47bc' }, grid: { drawOnChartArea: false }, position: 'right' }
+    }
+  }
+});
+</script>
+{% endif %}
+{% endblock %}
