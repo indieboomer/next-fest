@@ -39,9 +39,27 @@ def init_db(conn):
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         appid INTEGER NOT NULL,
         recommendations INTEGER,
+        review_score INTEGER,
+        review_score_desc TEXT,
+        total_positive INTEGER,
+        total_negative INTEGER,
+        total_reviews INTEGER,
+        player_count INTEGER,
         collected_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (appid) REFERENCES games (appid)
     )''')
+    # Migrate existing snapshots table if columns are missing
+    existing = {row[1] for row in c.execute("PRAGMA table_info(snapshots)")}
+    for col, typedef in [
+        ('review_score',      'INTEGER'),
+        ('review_score_desc', 'TEXT'),
+        ('total_positive',    'INTEGER'),
+        ('total_negative',    'INTEGER'),
+        ('total_reviews',     'INTEGER'),
+        ('player_count',      'INTEGER'),
+    ]:
+        if col not in existing:
+            c.execute(f'ALTER TABLE snapshots ADD COLUMN {col} {typedef}')
     conn.commit()
 
 
@@ -82,11 +100,43 @@ def fetch_game(appid):
     return data[str(appid)]['data']
 
 
+def fetch_reviews(appid):
+    """Returns review summary dict or empty dict on failure."""
+    url = (f"https://store.steampowered.com/appreviews/{appid}"
+           f"?json=1&language=all&num_per_page=0&filter=recent")
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        if data.get('success') == 1:
+            return data.get('query_summary', {})
+    except Exception as e:
+        log.warning("Reviews fetch failed for %d: %s", appid, e)
+    return {}
+
+
+def fetch_player_count(appid):
+    """Returns current concurrent player count or None on failure."""
+    url = (f"https://api.steampowered.com/ISteamUserStats/"
+           f"GetNumberOfCurrentPlayers/v1/?appid={appid}")
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        if data['response']['result'] == 1:
+            return data['response']['player_count']
+    except Exception as e:
+        log.warning("Player count fetch failed for %d: %s", appid, e)
+    return None
+
+
 def collect():
     log.info("Starting data collection...")
 
     appids = scrape_appids()
     log.info("Found %d appids", len(appids))
+
+    if not appids:
+        log.info("No appids found — fest may not have started yet")
+        return
 
     conn = sqlite3.connect(DB_PATH)
     init_db(conn)
@@ -128,6 +178,17 @@ def collect():
             price_final = price_overview.get('final', 0)
             price_currency = price_overview.get('currency', '')
 
+            # Reviews
+            reviews = fetch_reviews(appid)
+            review_score      = reviews.get('review_score')
+            review_score_desc = reviews.get('review_score_desc')
+            total_positive    = reviews.get('total_positive')
+            total_negative    = reviews.get('total_negative')
+            total_reviews     = reviews.get('total_reviews')
+
+            # Live player count
+            player_count = fetch_player_count(appid)
+
             c.execute('''INSERT OR REPLACE INTO games
                 (appid, name, genres, tags, categories, has_ai_disclosure,
                  developers, publishers, release_date, supported_languages,
@@ -141,10 +202,19 @@ def collect():
                  price_initial, price_final, price_currency,
                  appid))
 
-            c.execute('INSERT INTO snapshots (appid, recommendations) VALUES (?, ?)',
-                      (appid, recommendations))
+            c.execute('''INSERT INTO snapshots
+                (appid, recommendations,
+                 review_score, review_score_desc,
+                 total_positive, total_negative, total_reviews,
+                 player_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                (appid, recommendations,
+                 review_score, review_score_desc,
+                 total_positive, total_negative, total_reviews,
+                 player_count))
 
-            log.info("Collected %s (%d)", name, appid)
+            log.info("Collected %s (%d) — reviews: %s, players: %s",
+                     name, appid, review_score_desc or 'n/a', player_count or 'n/a')
         except Exception as e:
             log.error("Error fetching appid %d: %s", appid, e)
         time.sleep(1)
@@ -154,7 +224,7 @@ def collect():
     log.info("Data collection complete")
 
 
-schedule.every().day.at("00:00").do(collect)
+schedule.every().hour.do(collect)
 
 collect()
 
