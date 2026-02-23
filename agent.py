@@ -63,12 +63,41 @@ def init_db(conn):
     conn.commit()
 
 
+def _extract_appids_from_dom(page):
+    """Pull all visible appids from the current page DOM."""
+    ids = set()
+    for el in page.query_selector_all('[data-ds-appid]'):
+        val = el.get_attribute('data-ds-appid') or ''
+        for aid in val.split(','):
+            aid = aid.strip()
+            if aid.isdigit():
+                ids.add(int(aid))
+    for link in page.query_selector_all('a[href*="/app/"]'):
+        href = link.get_attribute('href') or ''
+        m = re.search(r'/app/(\d+)', href)
+        if m:
+            ids.add(int(m.group(1)))
+    return ids
+
+
+def _scroll_sections(page):
+    """Scroll every SaleSection into the viewport to trigger its AJAX load."""
+    sections = page.query_selector_all('[id^="SaleSection_"]')
+    for section in sections:
+        section.scroll_into_view_if_needed()
+        time.sleep(3)
+    # Final sweep
+    page.evaluate("window.scrollTo(0, 0)")
+    time.sleep(1)
+    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+    time.sleep(2)
+
+
 def scrape_appids():
-    appids = set()
+    all_appids = set()
     with sync_playwright() as p:
         browser = p.chromium.launch(args=['--no-sandbox', '--disable-dev-shm-usage'])
         context = browser.new_context()
-        # Bypass age gate and GDPR consent popup
         context.add_cookies([
             {'name': 'birthtime',       'value': '631148401',  'domain': 'store.steampowered.com', 'path': '/'},
             {'name': 'lastagecheckage', 'value': '1-0-1990',   'domain': 'store.steampowered.com', 'path': '/'},
@@ -79,53 +108,40 @@ def scrape_appids():
         page = context.new_page()
 
         page.goto("https://store.steampowered.com/sale/nextfest", wait_until='domcontentloaded')
-
-        # Sections use id="SaleSection_XXXXX" — wait for at least one to appear
         try:
             page.wait_for_selector('[id^="SaleSection_"]', timeout=20000)
         except Exception:
             log.warning("SaleSection elements not found within timeout")
-
         time.sleep(3)
 
-        # Scroll each section into view one by one — sections use Intersection Observer
-        # and only fire their AJAX request when they actually enter the viewport
-        sections = page.query_selector_all('[id^="SaleSection_"]')
-        log.info("Found %d sections — scrolling each into view", len(sections))
-        for i, section in enumerate(sections):
-            section.scroll_into_view_if_needed()
-            time.sleep(3)  # wait for section's AJAX to complete
-            link_count = len(page.query_selector_all('a[href*="/app/"]'))
-            log.info("Section %d/%d — cumulative app-links: %d", i + 1, len(sections), link_count)
+        # Discover tabs (genre tabs like Action, Adventure, RPG, etc.)
+        tabs = page.query_selector_all('.SaleTab')
+        log.info("Found %d tabs, %d sections",
+                 len(tabs), len(page.query_selector_all('[id^="SaleSection_"]')))
 
-        # Final pass: scroll back to top then to bottom for any missed late-loaders
-        page.evaluate("window.scrollTo(0, 0)")
-        time.sleep(1)
-        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        time.sleep(3)
-
-        log.info("Final count — sections: %d, app-links: %d, ds-appid: %d",
-                 len(page.query_selector_all('[id^="SaleSection_"]')),
-                 len(page.query_selector_all('a[href*="/app/"]')),
-                 len(page.query_selector_all('[data-ds-appid]')))
-
-        # Primary: data-ds-appid attributes on game cards
-        for el in page.query_selector_all('[data-ds-appid]'):
-            val = el.get_attribute('data-ds-appid') or ''
-            for aid in val.split(','):
-                aid = aid.strip()
-                if aid.isdigit():
-                    appids.add(int(aid))
-
-        # Fallback: parse /app/ href links
-        for link in page.query_selector_all('a[href*="/app/"]'):
-            href = link.get_attribute('href') or ''
-            m = re.search(r'/app/(\d+)', href)
-            if m:
-                appids.add(int(m.group(1)))
+        if tabs:
+            # Click each tab, scroll its sections, accumulate appids
+            for tab_idx in range(len(tabs)):
+                tabs = page.query_selector_all('.SaleTab')
+                if tab_idx >= len(tabs):
+                    break
+                tab_name = (tabs[tab_idx].inner_text() or '').strip()
+                tabs[tab_idx].click()
+                time.sleep(2)
+                _scroll_sections(page)
+                before = len(all_appids)
+                all_appids.update(_extract_appids_from_dom(page))
+                log.info("Tab %d/%d '%s': +%d → %d total",
+                         tab_idx + 1, len(tabs), tab_name,
+                         len(all_appids) - before, len(all_appids))
+        else:
+            # No tabs found — fall back to plain section scroll
+            _scroll_sections(page)
+            all_appids.update(_extract_appids_from_dom(page))
+            log.info("No tabs — section scroll found %d appids", len(all_appids))
 
         browser.close()
-    return appids
+    return all_appids
 
 
 def fetch_game(appid):
