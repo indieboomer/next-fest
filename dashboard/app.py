@@ -101,10 +101,10 @@ def index():
 
     SPOTLIGHT_APPID = 3700780  # Wild West Pioneers Demo
     spotlight_row = c.execute("""
-        SELECT g.name, g.appid, g.genres, g.review_score_desc AS g_review,
+        SELECT g.name, g.appid, g.genres, g.fullgame_appid,
                s.player_count, s.total_reviews, s.review_score_desc,
                s.recommendations, s.total_positive, s.total_negative,
-               s.collected_at
+               s.main_game_followers, s.collected_at
         FROM games g
         LEFT JOIN snapshots s ON s.appid = g.appid
             AND s.collected_at = (SELECT MAX(collected_at) FROM snapshots WHERE appid = g.appid)
@@ -174,22 +174,24 @@ def game_detail(appid):
 
     snapshots = conn.execute("""
         SELECT collected_at, recommendations, player_count,
-               total_positive, total_negative, review_score_desc
+               total_positive, total_negative, review_score_desc, main_game_followers
         FROM snapshots WHERE appid = ? ORDER BY collected_at ASC
     """, (appid,)).fetchall()
 
     conn.close()
 
-    chart_labels = [s['collected_at'] for s in snapshots]
-    chart_recs   = [s['recommendations'] for s in snapshots]
-    chart_players = [s['player_count'] for s in snapshots]
+    chart_labels    = [s['collected_at'] for s in snapshots]
+    chart_recs      = [s['recommendations'] for s in snapshots]
+    chart_players   = [s['player_count'] for s in snapshots]
+    chart_followers = [s['main_game_followers'] for s in snapshots]
 
     return render_template('game_detail.html',
                            game=dict(game),
                            snapshots=[dict(s) for s in snapshots],
                            chart_labels=json.dumps(chart_labels),
                            chart_recs=json.dumps(chart_recs),
-                           chart_players=json.dumps(chart_players))
+                           chart_players=json.dumps(chart_players),
+                           chart_followers=json.dumps(chart_followers))
 
 
 @app.route('/chat', methods=['GET', 'POST'])

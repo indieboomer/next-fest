@@ -65,13 +65,14 @@
       <div class="card-header">Snapshot History ({{ snapshots | length }} runs)</div>
       <div class="table-responsive">
         <table class="table table-sm mb-0">
-          <thead><tr><th>Time</th><th>Recs</th><th>Players</th><th>Positive</th><th>Negative</th><th>Rating</th></tr></thead>
+          <thead><tr><th>Time</th><th>Recs</th><th>Players</th><th>Followers</th><th>Positive</th><th>Negative</th><th>Rating</th></tr></thead>
           <tbody>
           {% for s in snapshots | reverse %}
           <tr>
             <td><small>{{ s.collected_at }}</small></td>
             <td>{{ s.recommendations or '—' }}</td>
             <td>{{ s.player_count or '—' }}</td>
+            <td>{{ s.main_game_followers or '—' }}</td>
             <td>{{ s.total_positive or '—' }}</td>
             <td>{{ s.total_negative or '—' }}</td>
             <td><small>{{ s.review_score_desc or '—' }}</small></td>
@@ -90,9 +91,10 @@
 {% block scripts %}
 {% if snapshots %}
 <script>
-const labels  = {{ chart_labels | safe }};
-const recs    = {{ chart_recs | safe }};
-const players = {{ chart_players | safe }};
+const labels    = {{ chart_labels | safe }};
+const recs      = {{ chart_recs | safe }};
+const players   = {{ chart_players | safe }};
+const followers = {{ chart_followers | safe }};
 
 new Chart(document.getElementById('trendChart'), {
   data: {
@@ -107,6 +109,11 @@ new Chart(document.getElementById('trendChart'), {
         type: 'line', label: 'Current Players', data: players,
         borderColor: '#ab47bc', backgroundColor: 'rgba(171,71,188,.1)',
         yAxisID: 'y2', tension: .3, fill: false
+      },
+      {
+        type: 'line', label: 'Main Game Followers', data: followers,
+        borderColor: '#ffd54f', backgroundColor: 'rgba(255,213,79,.1)',
+        yAxisID: 'y3', tension: .3, fill: false
       }
     ]
   },
@@ -116,7 +123,9 @@ new Chart(document.getElementById('trendChart'), {
     scales: {
       x:  { ticks: { color: '#aab4be', maxTicksLimit: 8 }, grid: { color: '#1e2438' } },
       y:  { ticks: { color: '#4fc3f7' }, grid: { color: '#1e2438' }, position: 'left' },
-      y2: { ticks: { color: '#ab47bc' }, grid: { drawOnChartArea: false }, position: 'right' }
+      y2: { ticks: { color: '#ab47bc' }, grid: { drawOnChartArea: false }, position: 'right' },
+      y3: { ticks: { color: '#ffd54f' }, grid: { drawOnChartArea: false }, position: 'right',
+            display: followers.some(v => v !== null) }
     }
   }
 });

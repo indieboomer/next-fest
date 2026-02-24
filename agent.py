@@ -51,15 +51,25 @@ def init_db(conn):
     # Migrate existing snapshots table if columns are missing
     existing = {row[1] for row in c.execute("PRAGMA table_info(snapshots)")}
     for col, typedef in [
-        ('review_score',      'INTEGER'),
-        ('review_score_desc', 'TEXT'),
-        ('total_positive',    'INTEGER'),
-        ('total_negative',    'INTEGER'),
-        ('total_reviews',     'INTEGER'),
-        ('player_count',      'INTEGER'),
+        ('review_score',        'INTEGER'),
+        ('review_score_desc',   'TEXT'),
+        ('total_positive',      'INTEGER'),
+        ('total_negative',      'INTEGER'),
+        ('total_reviews',       'INTEGER'),
+        ('player_count',        'INTEGER'),
+        ('main_game_followers', 'INTEGER'),
     ]:
         if col not in existing:
             c.execute(f'ALTER TABLE snapshots ADD COLUMN {col} {typedef}')
+
+    # Migrate existing games table if columns are missing
+    existing_g = {row[1] for row in c.execute("PRAGMA table_info(games)")}
+    for col, typedef in [
+        ('fullgame_appid', 'INTEGER'),
+    ]:
+        if col not in existing_g:
+            c.execute(f'ALTER TABLE games ADD COLUMN {col} {typedef}')
+
     conn.commit()
 
 
@@ -166,6 +176,22 @@ def fetch_player_count(appid):
     return None
 
 
+def fetch_followers(appid):
+    """Scrape follower count from a game's Steam store page. Returns int or None."""
+    url = f"https://store.steampowered.com/app/{appid}"
+    try:
+        resp = requests.get(url, timeout=15, headers={
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Cookie': 'birthtime=631148401; lastagecheckage=1-0-1990; mature_content=1',
+        })
+        m = re.search(r'"nFollowers"\s*:\s*(\d+)', resp.text)
+        if m:
+            return int(m.group(1))
+    except Exception as e:
+        log.warning("Followers fetch failed for %d: %s", appid, e)
+    return None
+
+
 def collect():
     log.info("Starting data collection...")
 
@@ -235,20 +261,25 @@ def collect():
                 price_final = price_overview.get('final', 0)
                 price_currency = price_overview.get('currency', '')
 
+                fullgame = game.get('fullgame', {})
+                fullgame_appid = int(fullgame['appid']) if fullgame.get('appid') else None
+
                 c.execute('''INSERT OR REPLACE INTO games
                     (appid, name, genres, tags, categories, has_ai_disclosure,
                      developers, publishers, release_date, supported_languages,
-                     price_initial, price_final, price_currency,
+                     price_initial, price_final, price_currency, fullgame_appid,
                      first_seen, last_updated)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                             COALESCE((SELECT first_seen FROM games WHERE appid = ?), CURRENT_TIMESTAMP),
                             CURRENT_TIMESTAMP)''',
                     (appid, name, genres, tags, categories, has_ai_disclosure,
                      developers, publishers, release_date, supported_languages,
-                     price_initial, price_final, price_currency,
+                     price_initial, price_final, price_currency, fullgame_appid,
                      appid))
             else:
-                name = c.execute("SELECT name FROM games WHERE appid=?", (appid,)).fetchone()[0]
+                row = c.execute("SELECT name, fullgame_appid FROM games WHERE appid=?", (appid,)).fetchone()
+                name = row[0]
+                fullgame_appid = row[1]
 
             # Always: collect hourly metrics snapshot
             reviews = fetch_reviews(appid)
@@ -258,17 +289,18 @@ def collect():
             total_negative    = reviews.get('total_negative')
             total_reviews     = reviews.get('total_reviews')
             player_count      = fetch_player_count(appid)
+            main_game_followers = fetch_followers(fullgame_appid) if fullgame_appid else None
 
             c.execute('''INSERT INTO snapshots
                 (appid, recommendations,
                  review_score, review_score_desc,
                  total_positive, total_negative, total_reviews,
-                 player_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                 player_count, main_game_followers)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                 (appid, recommendations,
                  review_score, review_score_desc,
                  total_positive, total_negative, total_reviews,
-                 player_count))
+                 player_count, main_game_followers))
 
             log.info("%s (%d) — %s, players: %s",
                      name or appid, appid, review_score_desc or 'no reviews', player_count or 'n/a')
