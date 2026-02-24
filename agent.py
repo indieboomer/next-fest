@@ -151,12 +151,14 @@ def fetch_game(appid):
 def fetch_reviews(appid):
     """Returns review summary dict or empty dict on failure."""
     url = (f"https://store.steampowered.com/appreviews/{appid}"
-           f"?json=1&language=all&num_per_page=0&filter=recent")
+           f"?json=1&language=all&num_per_page=0&filter=all&purchase_type=all")
     try:
         resp = requests.get(url, timeout=10)
         data = resp.json()
         if data.get('success') == 1:
-            return data.get('query_summary', {})
+            summary = data.get('query_summary', {})
+            if summary.get('total_reviews', 0) > 0:
+                return summary
     except Exception as e:
         log.warning("Reviews fetch failed for %d: %s", appid, e)
     return {}
@@ -282,7 +284,12 @@ def collect():
                 fullgame_appid = row[1]
 
             # Always: collect hourly metrics snapshot
+            # Demos rarely have reviews on their own appid — fall back to main game's reviews
             reviews = fetch_reviews(appid)
+            if not reviews and fullgame_appid:
+                reviews = fetch_reviews(fullgame_appid)
+                if reviews:
+                    log.info("%s (%d) — using main game reviews (appid %d)", name or appid, appid, fullgame_appid)
             review_score      = reviews.get('review_score')
             review_score_desc = reviews.get('review_score_desc')
             total_positive    = reviews.get('total_positive')
