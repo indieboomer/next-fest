@@ -176,19 +176,20 @@ def collect():
     # Load already-known appids from DB
     known = {row[0] for row in c.execute("SELECT appid FROM games")}
 
-    if known:
-        # Subsequent runs: skip Playwright, use stored appids
-        log.info("Using %d known appids from DB — skipping scrape", len(known))
-        appids = known
-    else:
-        # First run: discover all demos via Playwright offset pagination
-        log.info("DB empty — running full Playwright discovery (~10 min)...")
-        appids = scrape_appids()
-        log.info("Discovered %d appids", len(appids))
-        if not appids:
-            log.info("No appids found — fest may not have started yet")
-            conn.close()
-            return
+    # Always scrape to catch newly added demos and fill any offset gaps
+    log.info("Running Playwright discovery (known=%d)...", len(known))
+    scraped = scrape_appids()
+    log.info("Scrape found %d appids", len(scraped))
+
+    appids = known | scraped
+    if not appids:
+        log.info("No appids found — fest may not have started yet")
+        conn.close()
+        return
+
+    new_appids = scraped - known
+    if new_appids:
+        log.info("%d new appids discovered this run", len(new_appids))
 
     # Identify which appids still need metadata enrichment (new or previously failed)
     unenriched = appids - {row[0] for row in c.execute("SELECT appid FROM games WHERE name IS NOT NULL")}
