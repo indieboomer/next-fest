@@ -99,8 +99,21 @@ def index():
     """).fetchall()
     stats['top_games'] = [dict(r) for r in top_games]
 
+    SPOTLIGHT_APPID = 3700780  # Wild West Pioneers Demo
+    spotlight_row = c.execute("""
+        SELECT g.name, g.appid, g.genres, g.review_score_desc AS g_review,
+               s.player_count, s.total_reviews, s.review_score_desc,
+               s.recommendations, s.total_positive, s.total_negative,
+               s.collected_at
+        FROM games g
+        LEFT JOIN snapshots s ON s.appid = g.appid
+            AND s.collected_at = (SELECT MAX(collected_at) FROM snapshots WHERE appid = g.appid)
+        WHERE g.appid = ?
+    """, (SPOTLIGHT_APPID,)).fetchone()
+    spotlight = dict(spotlight_row) if spotlight_row else None
+
     conn.close()
-    return render_template('index.html', stats=stats)
+    return render_template('index.html', stats=stats, spotlight=spotlight)
 
 
 @app.route('/games')
