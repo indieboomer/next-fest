@@ -1,7 +1,7 @@
 import os
 import sqlite3
 import json
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_file
 from openai import OpenAI
 
 app = Flask(__name__)
@@ -209,6 +209,14 @@ def chat():
     )
     reply = response.choices[0].message.content
     return jsonify({'reply': reply})
+
+
+@app.route('/download-db')
+def download_db():
+    if not os.path.exists(DB_PATH):
+        return "Database not available yet.", 503
+    return send_file(DB_PATH, as_attachment=True, download_name='nextfest.db',
+                     mimetype='application/x-sqlite3')
 
 
 if __name__ == '__main__':

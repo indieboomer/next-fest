@@ -83,7 +83,7 @@ def _extract_appids_from_dom(page):
 def scrape_appids():
     all_appids = set()
     base = "https://store.steampowered.com/sale/nextfest"
-    offsets = range(0, 1750, 50)  # 0, 50, 100, … 1700
+    offsets = range(0, 3350, 50)  # 0, 50, 100, … 3300
 
     with sync_playwright() as p:
         browser = p.chromium.launch(args=['--no-sandbox', '--disable-dev-shm-usage'])
