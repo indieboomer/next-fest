@@ -14,33 +14,33 @@
     <div class="card mb-3">
       <div class="card-header">Metadata</div>
       <ul class="list-group list-group-flush">
-        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+        <li class="list-group-item">
           <span class="text-muted small d-block">Genres</span>{{ game.genres or '—' }}
         </li>
-        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+        <li class="list-group-item">
           <span class="text-muted small d-block">Tags</span>
           <span style="font-size:.85rem">{{ game.tags or '—' }}</span>
         </li>
-        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+        <li class="list-group-item">
           <span class="text-muted small d-block">Developer</span>{{ game.developers or '—' }}
         </li>
-        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+        <li class="list-group-item">
           <span class="text-muted small d-block">Publisher</span>{{ game.publishers or '—' }}
         </li>
-        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+        <li class="list-group-item">
           <span class="text-muted small d-block">Release Date</span>{{ game.release_date or '—' }}
         </li>
-        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+        <li class="list-group-item">
           <span class="text-muted small d-block">Price</span>
           {% if game.price_final == 0 %}Free
           {% elif game.price_final %}{{ "%.2f"|format(game.price_final / 100) }} {{ game.price_currency }}
           {% else %}—{% endif %}
         </li>
-        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+        <li class="list-group-item">
           <span class="text-muted small d-block">AI Disclosure</span>
           {% if game.has_ai_disclosure %}<span class="badge badge-ai">Yes</span>{% else %}No{% endif %}
         </li>
-        <li class="list-group-item" style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+        <li class="list-group-item">
           <span class="text-muted small d-block">Languages</span>
           <span style="font-size:.8rem">{{ game.supported_languages or '—' }}</span>
         </li>

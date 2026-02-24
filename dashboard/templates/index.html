@@ -4,11 +4,11 @@
 <h2 class="mb-4">Overview</h2>
 
 {% if stats is none %}
-<div class="alert" style="background:#1a1f2e;border:1px solid #ff6b6b;color:#ff6b6b;">
+<div class="alert" style="background:#1e293b;border:1px solid #ff6b6b;color:#ff6b6b;">
   Database not available yet — the agent will create it on first successful collection run.
 </div>
 {% elif stats.total_games == 0 %}
-<div class="alert" style="background:#1a1f2e;border:1px solid #ffa726;color:#ffa726;">
+<div class="alert" style="background:#1e293b;border:1px solid #ffa726;color:#ffa726;">
   No games collected yet. Steam Next Fest may not have started, or the agent is still running its first pass.
 </div>
 {% else %}
@@ -44,7 +44,7 @@
 </div>
 
 {% if spotlight %}
-<div class="card mb-4" style="border-left:4px solid #ffd54f;background:#1a1f2e;">
+<div class="card mb-4" style="border-left:4px solid #ffd54f;">
   <div class="card-header" style="color:#ffd54f;">
     ⭐ Spotlight — <a href="/games/{{ spotlight.appid }}" style="color:#ffd54f;">{{ spotlight.name }}</a>
     <small class="text-muted ms-2" style="font-size:.75rem;">appid {{ spotlight.appid }}</small>
@@ -73,7 +73,7 @@
       </div>
     </div>
     {% if spotlight.main_game_followers is not none and spotlight.fullgame_appid %}
-    <div class="mt-3 pt-2" style="border-top:1px solid #2a3050;">
+    <div class="mt-3 pt-2" style="border-top:1px solid #334155;">
       <span class="text-muted small">Main Game Followers:</span>
       <strong style="color:#ffd54f;">{{ '{:,}'.format(spotlight.main_game_followers) }}</strong>
       <a href="https://store.steampowered.com/app/{{ spotlight.fullgame_appid }}"
@@ -96,8 +96,7 @@
       <div class="card-header">Top Genres</div>
       <ul class="list-group list-group-flush">
         {% for g in stats.top_genres %}
-        <li class="list-group-item d-flex justify-content-between align-items-center"
-            style="background:#1a1f2e;border-color:#2a3050;color:#e0e0e0;">
+        <li class="list-group-item d-flex justify-content-between align-items-center">
           <a href="/games?genre={{ g.genres | urlencode }}">{{ g.genres }}</a>
           <span class="badge" style="background:#1565c0;">{{ g.cnt }}</span>
         </li>
